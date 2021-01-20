@@ -1,38 +1,102 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const _ = require('lodash');
+const { connect, connection, Schema, model } = require('mongoose');
 const app = express();
-const date = require(`${__dirname}/date.js`);
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 
-console.log(require(`${__dirname}/date.js`));
+const db = 'toDoListDB';
+connect(`mongodb://localhost:27017/${db}`, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
-const todoItems = ['Do poop', 'Clean toilet', 'Wash butt'];
-const workItems = [];
+const itemSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+});
+
+const Item = model('Item', itemSchema);
+
+let poop = new Item({ name: 'Do Poop' });
+let cT = new Item({ name: 'Clean Toilet' });
+let wB = new Item({ name: 'Wash Butt' });
+
+let defaultItems = [poop, cT, wB];
+
+const listSchema = new Schema({
+  name: String,
+  listItems: [itemSchema],
+});
+
+const List = model('List', listSchema);
 
 app.get('/', (req, res) => {
-  res.render('list', { listTitle: date.getPrettyDate(), listItems: todoItems });
+  Item.find({}, (err, foundItems) => {
+    if (!foundItems.length) {
+      Item.insertMany(defaultItems);
+      res.redirect('/');
+    } else res.render('list', { listTitle: 'Today', listItems: foundItems });
+  });
 });
 
-app.get('/work', (req, res) => {
-  res.render('list', { listTitle: 'Work List', listItems: workItems });
-});
-
-app.get('/about', (req, res) => {
-  res.render('about');
+app.get('/:slug', (req, res) => {
+  const customListName = _.capitalize(req.params.slug);
+  List.findOne({ name: customListName }, (err, foundList) => {
+    if (foundList) {
+      res.render('list', {
+        listTitle: customListName,
+        listItems: foundList.listItems,
+      });
+    } else {
+      const userList = new List({
+        name: customListName,
+        listItems: defaultItems,
+      });
+      userList.save();
+      res.redirect(`/${customListName}`);
+    }
+  });
 });
 
 app.post('/', (req, res) => {
-  let { newListItem, listType } = req.body;
-  if (newListItem) {
-    if (listType === 'Work') {
-      workItems.push(newListItem);
-      res.redirect('/work');
-    } else {
-      todoItems.push(newListItem);
+  let itemName = req.body.newListItem;
+  let listTitle = req.body.listType;
+  let item = new Item({ name: itemName });
+
+  if (listTitle === 'Today') {
+    item.save();
+    res.redirect('/');
+  } else {
+    List.findOne({ name: listTitle }, (err, foundList) => {
+      foundList.listItems.push(item);
+      foundList.save();
+      res.redirect(`/${listTitle}`);
+    });
+  }
+});
+
+app.post('/delete', (req, res) => {
+  let deleteId = req.body.checkbox;
+  let listTitle = _.capitalize(req.body.listType);
+
+  if (listTitle === 'Today') {
+    Item.findByIdAndDelete(deleteId, () => {
       res.redirect('/');
-    }
+    });
+  } else {
+    List.updateOne(
+      { name: listTitle },
+      { $pull: { listItems: { _id: deleteId } } },
+      () => {
+        res.redirect(`/${listTitle}`);
+      }
+    );
   }
 });
 
