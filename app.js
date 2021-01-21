@@ -9,10 +9,13 @@ app.use(express.static('public'));
 app.set('view engine', 'ejs');
 
 const db = 'toDoListDB';
-connect(`mongodb://localhost:27017/${db}`, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+connect(
+  `mongodb+srv://admin-xander:banana123@cluster0.lohvw.mongodb.net/${db}`,
+  {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }
+);
 
 const itemSchema = new Schema({
   name: {
